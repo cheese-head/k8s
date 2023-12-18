@@ -302,6 +302,33 @@ defmodule K8s.Conn do
   @spec from_env() :: {:ok, t()} | {:error, :enoent | K8s.Conn.Error.t()}
   def from_env, do: from_env(@default_env_variable, [])
 
+  def from_string(config_string, opts \\ []) do
+    with {:ok, config} <- YamlElixir.read_from_string(config_string),
+         context_name <- opts[:context] || config["current-context"],
+         {:ok, context} <- find_configuration(config["contexts"], context_name, "context"),
+         user_name <- opts[:user] || context["user"],
+         {:ok, user} <- find_configuration(config["users"], user_name, "user"),
+         cluster_name <- opts[:cluster] || context["cluster"],
+         {:ok, cluster} <- find_configuration(config["clusters"], cluster_name, "cluster"),
+         {:ok, cert} <- PKI.cert_from_map(cluster, opts[:base_path]) do
+      insecure_skip_tls_verify =
+        Keyword.get(opts, :insecure_skip_tls_verify, cluster["insecure-skip-tls-verify"])
+
+      conn = %Conn{
+        cluster_name: cluster_name,
+        user_name: user_name,
+        url: cluster["server"],
+        ca_cert: cert,
+        auth: get_auth(user, nil),
+        insecure_skip_tls_verify: insecure_skip_tls_verify
+      }
+
+      {:ok, maybe_update_defaults(conn, opts)}
+    else
+      error -> error
+    end
+  end
+
   @spec find_configuration([map()], String.t(), String.t()) ::
           {:ok, map()} | {:error, K8s.Conn.Error.t()}
   defp find_configuration(items, name, type) do
