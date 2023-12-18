@@ -319,7 +319,7 @@ defmodule K8s.Conn do
         user_name: user_name,
         url: cluster["server"],
         ca_cert: cert,
-        auth: get_auth(user, nil),
+        auth: get_auth(user, opts[:base_path]),
         insecure_skip_tls_verify: insecure_skip_tls_verify
       }
 
